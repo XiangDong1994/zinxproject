@@ -7,10 +7,13 @@ type IRequest interface {
 	//得到当前的的请求链接
 	GetConnection()  IConnection
 
-
+/*
 	//得到链接数据
 	GetData() []byte
 
 	//得到链接长度
-	GetDataLen()  int
+	GetDataLen()  int*/
+
+	//得到请求消息
+	GetMsg()  IMessage
 }

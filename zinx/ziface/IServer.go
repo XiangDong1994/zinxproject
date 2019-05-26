@@ -10,8 +10,8 @@ type IServer interface {
 	Stop()
 	//运行服务器
 	Serve()
-	//增加添加路由功能   暴露给开发者
-	AddRouter(router IRouter)
+	//添加路由方法  暴露给开发者的
+	AddRouter(msgID uint32, router IRouter)
 
 
 }

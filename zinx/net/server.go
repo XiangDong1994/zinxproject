@@ -1,61 +1,44 @@
-/*
-servser模块实现层
+/**
+server模块的实现层
 */
-
-
 package net
 
 import (
-	"zinx/ziface"
 	"fmt"
 	"net"
+	"zinx/config"
+	"zinx/ziface"
 )
 
 type Server struct {
-	//服务器IP
+	//服务器ip
 	IPVersion string
 	IP string
-	//服务器接口
+	//服务器port
 	Port int
-	// 服务器名称
+	//服务器名称
 	Name string
 
-	Router ziface.IRouter
-}
-//定义回显业务
-func CallBackBusi(request ziface.IRequest) error {
-	//回显业务
-	fmt.Println("【conn Handle】 CallBack..")
-	c := request.GetConnection().GetTCPConnection()
-	buf := request.GetData()
-	cnt := request.GetDataLen()
-	if _, err := c.Write(buf[:cnt]);err !=nil {
-		fmt.Println("write back err ", err)
-		return err
-	}
-
-	return nil
+	//多路由的消息管理模块
+	MsgHandler ziface.IMsgHandler
 }
 
 
-//初始化的new方法
-
-func NewServer(name string)ziface.IServer{
+//初始化的New方法
+func NewServer(name string) ziface.IServer{
 	s := &Server{
-		Name:name,
+		Name:config.GlobalObject.Name,
 		IPVersion:"tcp4",
-		IP:"0.0.0.0",
-		Port:8999,
-		Router:nil,
-
+		IP:config.GlobalObject.Host,
+		Port:config.GlobalObject.Port,
+		MsgHandler:NewMsgHandler(),
 	}
+
 	return s
 }
 
-
-
 //启动服务器
-//创建原生的socket
+//原生socket 服务器编程
 func (s *Server) Start() {
 	fmt.Printf("[start] Server Linstenner at IP :%s, Port :%d, is starting..\n", s.IP, s.Port)
 
@@ -79,6 +62,8 @@ func (s *Server) Start() {
 	//3 阻塞等待客户端发送请求，
 	go func() {
 		for {
+			//应该是永久存在的。
+
 			//阻塞等待客户端请求,
 			conn, err := listenner.AcceptTCP()//只是针对TCP协议
 			if err != nil {
@@ -87,56 +72,36 @@ func (s *Server) Start() {
 			}
 
 			//创建一个Connection对象
-			dealConn := NewConnection(conn, cid, s.Router)
+			//将原生的conn 和 CallBack处理业务进行绑定
+			//dealConn := NewConnection(conn, cid, CallBackBusi)
+			//dealConn := NewConnection(conn, cid, s.Router)
+			dealConn := NewConnection(conn, cid, s.MsgHandler)
 			cid++
 
 
-			//此时conn就已经和对端客户端连接
+			//此时conn就已经和对端客户端连接 //处理与客户端的读写业务
 			go dealConn.Start()
 		}
-		/*	go func() {
-		//4客户端有数据请求，处理客户端业务	（读写)
-		for {
-			buf := make([]byte, 512)
-			cnt, err := conn.Read(buf)
-			if err != nil {
-				fmt.Println("recv buf.err", err)
-				break
-
-			}
-			fmt.Printf("recv client buf is %s,cnt = %d\n", buf, cnt)
-			//回显功能（业务）"lien
-			_, err = conn.Write(buf[:cnt])
-			if err != nil {
-				fmt.Println("write err is:", err)
-				continue
-			}
-		}
-	}()*/
-
-
 	}()
 
 }
-
-
-
 //停止服务器
-func(s *Server)Stop(){
-
-	//todo 将一些资源进行回收
+func (s *Server) Stop() {
+	//TODO 将一些服务器资源进行回收...
 }
 //运行服务器
-func(s *Server)Serve(){
-//启动监听功能
-s.Start()//并不希望他永久阻塞
-//todo 做一些其他扩展
- //阻塞//告诉cpu不再需要处理的，节省cpu资源
-	select {}
+func (s *Server )Serve() {
+	//启动server的监听功能
+	s.Start()//并不希望他永久的阻塞
+
+	//TODO  做一些其他的扩展
+	//阻塞//告诉CPU不再需要处理的，节省cpu资源
+	select{}//main函数不退出  //main函数 阻塞在这
 }
 
-func (s *Server) AddRouter(router ziface.IRouter) {
-	s.Router = router
+func (s *Server) AddRouter(msgId uint32, router ziface.IRouter) {
+	s.MsgHandler.AddRouter(msgId, router)
+	fmt.Println("Add Router SUCC!! msgID = ", msgId)
 }
 
 
