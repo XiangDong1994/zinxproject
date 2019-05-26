@@ -21,6 +21,14 @@ type Server struct {
 
 	//多路由的消息管理模块
 	MsgHandler ziface.IMsgHandler
+
+	//链接管理模块
+	connMgr ziface.IConnManager
+
+	//该server创建链接之后自动调用Hook函数
+	OnConnStart func(conn ziface.IConnection)
+	//该server销毁链接之前自动调用的Hook函数
+	OnConnStop func(conn ziface.IConnection)
 }
 
 
@@ -32,6 +40,7 @@ func NewServer(name string) ziface.IServer{
 		IP:config.GlobalObject.Host,
 		Port:config.GlobalObject.Port,
 		MsgHandler:NewMsgHandler(),
+		connMgr:NewConnManager(),
 	}
 
 	return s
@@ -72,10 +81,14 @@ func (s *Server) Start() {
 			}
 
 			//创建一个Connection对象
-			//将原生的conn 和 CallBack处理业务进行绑定
-			//dealConn := NewConnection(conn, cid, CallBackBusi)
-			//dealConn := NewConnection(conn, cid, s.Router)
-			dealConn := NewConnection(conn, cid, s.MsgHandler)
+			//判断当前server链接数量是否已经最大值
+			if s.connMgr.Len() >= int(config.GlobalObject.MaxConn) {
+				//当前链接已经满了
+				fmt.Println("---> Too many Connection MAxConn = ", config.GlobalObject.MaxConn)
+				conn.Close()
+				continue
+			}
+			dealConn := NewConnection(s, conn, cid, s.MsgHandler)
 			cid++
 
 
@@ -87,7 +100,8 @@ func (s *Server) Start() {
 }
 //停止服务器
 func (s *Server) Stop() {
-	//TODO 将一些服务器资源进行回收...
+	//服务器停止应当清空当前链接
+	s.connMgr.ClearConn()
 }
 //运行服务器
 func (s *Server )Serve() {
@@ -103,6 +117,32 @@ func (s *Server) AddRouter(msgId uint32, router ziface.IRouter) {
 	s.MsgHandler.AddRouter(msgId, router)
 	fmt.Println("Add Router SUCC!! msgID = ", msgId)
 }
+func (s *Server) GetConnMgr() ziface.IConnManager {
+	return s.connMgr
+}
+
+//注册 创建链接之后 调用的 Hook函数 的方法
+func(s *Server) AddOnConnStart(hookFunc func(conn ziface.IConnection)) {
+	s.OnConnStart = hookFunc
+}
+//注册 销毁链接之前调用的Hook函数 的方法
+func (s *Server) AddOnConnStop(hookFunc func(conn ziface.IConnection)) {
+	s.OnConnStop = hookFunc
+}
 
 
+//调用 创建链接之后的HOOK函数的方法
+func (s *Server) CallOnConnStart(conn ziface.IConnection) {
+	if s.OnConnStart != nil {
+		fmt.Println("---> Call OnConnStart()...")
+		s.OnConnStart(conn)
+	}
+}
+//调用 销毁链接之前调用的HOOk函数的方法
+func (s *Server) CallOnConnStop(conn ziface.IConnection) {
+	if s.OnConnStop != nil {
+		fmt.Println("---> Call OnConnStop()...")
+		s.OnConnStop(conn)
+	}
+}
 

@@ -1,8 +1,4 @@
-/**
-* @Author: Aceld(刘丹冰)
-* @Date: 2019/5/23 17:26
-* @Mail: danbing.at@gmail.com
-*/
+
 package config
 
 import (
@@ -23,6 +19,9 @@ type GlobalObj struct {
 
 	Version string //当前框架的版本号
 	MaxPackageSize uint32 //每次Read一次的最大长度
+	WorkerPoolSize   uint32 //当前服务器要开启多少了worker Goroutine
+	MaxWorkerTaskLen uint32 //每个worker的对应的消息对象 允许缓存的最大任务Request数量
+	MaxConn          uint32 //当前server的最大链接数量
 }
 
 //定义一个全局的对外的配置的对象
@@ -54,7 +53,11 @@ func init() {
 		Host:"0.0.0.0",
 		Port:8999,
 		Version:"V0.4",
-		MaxPackageSize:512,
+
+		MaxPackageSize:   512,
+		WorkerPoolSize:   10,
+		MaxWorkerTaskLen: 4096,
+		MaxConn: 1000,
 	}
 
 	//加载文件

@@ -6,10 +6,16 @@ import (
      "errors"
 	"fmt"
 	"io"
+	"zinx/config"
 )
 
 //具体的TCP链接模块
 type Connection struct {
+
+	//当前链接是属于哪个server创建
+	server ziface.IServer
+
+
 	//当前链接的原生套接字
 	Conn *net.TCPConn
 
@@ -34,8 +40,9 @@ type Connection struct {
 }
 
 //初始化链接方法
-func NewConnection(conn *net.TCPConn, connID uint32, handler ziface.IMsgHandler) ziface.IConnection {
+func NewConnection(server ziface.IServer,conn *net.TCPConn, connID uint32, handler ziface.IMsgHandler) ziface.IConnection {
 	c := &Connection{
+		server:server,
 		Conn:      conn,
 		ConnID:    connID,
 		//handleAPI: callback_api,
@@ -44,6 +51,9 @@ func NewConnection(conn *net.TCPConn, connID uint32, handler ziface.IMsgHandler)
 		msgChan: make(chan []byte), //初始化Reader Writer通信的Channel
 		writerExitChan:make(chan bool),
 	}
+	//当已经成功创建一个链接的时候，添加到链接管理器中
+	c.server.GetConnMgr().Add(c)
+
 	return  c
 }
 //针对链接读业务的方法
@@ -118,7 +128,11 @@ func (c *Connection) StartReader() {
 
 		//调用用户传递进来的业务 模板 设计模式
 
+		if config.GlobalObject.WorkerPoolSize > 0 {
+			c.MsgHandler.SendMsgToTaskQueue(req)
+		} else {
 			go c.MsgHandler.DoMsgHandler(req)
+		}
 
 	}
 	}
@@ -161,19 +175,26 @@ func (c *Connection) Start() {
 
 	//进行写业务
 	go c.StartWriter()
+
+	//调用创建链接之后  用户自定义的Hook业务
+	c.server.CallOnConnStart(c)
 }
 
 //停止链接
 func (c *Connection) Stop() {
       fmt.Println("stop the connection id is :",c.ConnID)
-      //回收工作
-      if c.isClosed==true{
-      	return
-	  }
+	//调用销毁链接之前用户自定义的Hook函数
+	c.server.CallOnConnStop(c)
       c.isClosed = true
 
-      //
+
+	//告知writer 链接已经关闭了
+	c.writerExitChan <- true
+
+      //关闭原生套接字
       _ = c.Conn.Close()
+	//将当前链接从链接管理模块删除
+	c.server.GetConnMgr().Remove(c.ConnID)
       //释放channal资源
 	close(c.msgChan)
 	close(c.writerExitChan)
